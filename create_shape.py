@@ -1,6 +1,7 @@
 import pandas as pd
 import geopandas as gpd
 import folium
+from folium.features import DivIcon
 
 # Wczytanie danych demograficznych
 file_path = 'C:/Projekty/Life Expect/table_b_life_expectancy_in_poland_by_voivodships_in_2022.xlsx'
@@ -80,18 +81,38 @@ print(gdf.head())
 # Tworzenie mapy
 m = folium.Map(location=[52.237049, 21.017532], zoom_start=6)
 
-# Dodanie danych do mapy
-folium.Choropleth(
-    geo_data=gdf,
-    name='choropleth',
-    data=gdf,
-    columns=['Voivodship', 'Male_0'],  # Zmień na kolumnę, którą chcesz wizualizować
-    key_on='feature.properties.Voivodship',
-    fill_color='YlGn',
-    fill_opacity=0.7,
-    line_opacity=0.2,
-    legend_name='Population of Males aged 0'
-).add_to(m)
+# Dodanie warstw do mapy
+age_groups = ['Male_0', 'Female_0']
+
+for age_group in age_groups:
+    choropleth = folium.Choropleth(
+        geo_data=gdf,
+        name=age_group,
+        data=gdf,
+        columns=['Voivodship', age_group],
+        key_on='feature.properties.Voivodship',
+        fill_color='YlGn',
+        fill_opacity=0.7,
+        line_opacity=0.2,
+        legend_name=f'Population of {age_group.replace("_", " ")}'
+    )
+    choropleth.add_to(m)
+    
+    # Tworzenie grupy warstw dla etykiet
+    label_layer = folium.FeatureGroup(name=f'{age_group} Labels')
+    
+    # Dodanie etykiet do grupy warstw
+    for _, row in gdf.iterrows():
+        folium.map.Marker(
+            [row.geometry.centroid.y, row.geometry.centroid.x],
+            icon=DivIcon(
+                icon_size=(150,36),
+                icon_anchor=(0,0),
+                html=f'<div style="font-size: 10pt">{int(row[age_group])}</div>',
+            )
+        ).add_to(label_layer)
+    
+    label_layer.add_to(m)
 
 # Dodanie warstwy kontrolnej
 folium.LayerControl().add_to(m)
