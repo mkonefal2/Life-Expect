@@ -1,3 +1,4 @@
+import argparse
 import pandas as pd
 import geopandas as gpd
 import plotly.express as px
@@ -10,8 +11,12 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 
 # Wczytanie danych demograficznych
-file_path = 'C:/Projekty/Life Expect/table_b_life_expectancy_in_poland_by_voivodships_in_2022.xlsx'
-df = pd.read_excel(file_path)
+parser = argparse.ArgumentParser()
+parser.add_argument('--file_path', type=str, help='Path to the Excel file')
+args = parser.parse_args()
+
+# Wczytanie danych demograficznych
+df = pd.read_excel(args.file_path)
 
 # Usuwamy pierwszą kolumnę
 df = df.iloc[:, 1:]
@@ -109,12 +114,12 @@ os.makedirs(output_dir, exist_ok=True)
 
 # Mapowanie nazw kolumn na bardziej czytelne nazwy
 age_group_labels = {
-    'Male_0': 'Oczekiwana długość życia mężczyzn w wieku 0 lat',
+    'Male_0': 'Oczekiwana długość życia mężczyzn',
     'Male_15': 'Oczekiwana długość życia mężczyzn w wieku 15 lat',
     'Male_30': 'Oczekiwana długość życia mężczyzn w wieku 30 lat',
     'Male_45': 'Oczekiwana długość życia mężczyzn w wieku 45 lat',
     'Male_60': 'Oczekiwana długość życia mężczyzn w wieku 60 lat',
-    'Female_0': 'Oczekiwana długość życia kobiet w wieku 0 lat',
+    'Female_0': 'Oczekiwana długość życia kobiet',
     'Female_15': 'Oczekiwana długość życia kobiet w wieku 15 lat',
     'Female_30': 'Oczekiwana długość życia kobiet w wieku 30 lat',
     'Female_45': 'Oczekiwana długość życia kobiet w wieku 45 lat',
@@ -127,17 +132,17 @@ colorscale = [[0, "#dad66f"], [1, "darkgreen"]]
 for age_group, label in age_group_labels.items():
     hex_gdf[age_group] = hex_gdf[age_group].astype(float)
 
-    # Use the colorscale in the figure
+    # Utworzenie interaktywnej mapy heksagonalnej
     fig = px.choropleth_mapbox(
         hex_gdf, geojson=hex_gdf.geometry, 
         locations=hex_gdf.index, color=age_group,
         hover_name="Voivodship", 
         mapbox_style="white-bg", 
-        zoom=6, center = {"lat": 52.069167, "lon": 19.480556},
+        zoom=5, center = {"lat": 52.069167, "lon": 19.480556},
         opacity=0.9, 
         labels={age_group: label},
         hover_data={'Voivodship': True, 'h3_index': False},
-        color_continuous_scale=colorscale  # Use the colorscale here
+        color_continuous_scale=colorscale  
     )
     fig.update_traces(marker_line=dict(width=3, color='white'))  # Dodanie białych linii między heksagonami
     fig.update_layout(coloraxis_showscale=False)

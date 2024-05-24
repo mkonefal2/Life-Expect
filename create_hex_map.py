@@ -8,8 +8,11 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np
 from matplotlib.colors import LinearSegmentedColormap
 
-# Wczytanie danych demograficznych
-file_path = 'C:/Projekty/Life Expect/table_b_life_expectancy_in_poland_by_voivodships_in_2022.xlsx'
+
+# Create argument parser
+parser = argparse.ArgumentParser()
+parser.add_argument('--file_path', type=str, help='Path to the Excel file')
+args = parser.parse_args()
 df = pd.read_excel(file_path)
 
 # Usuwamy pierwszą kolumnę
@@ -113,12 +116,12 @@ os.makedirs(output_dir, exist_ok=True)
 
 # Mapowanie nazw kolumn na bardziej czytelne nazwy
 age_group_labels = {
-    'Male_0': 'Oczekiwana długość życia mężczyzn w wieku 0 lat',
+    'Male_0': 'Oczekiwana długość życia mężczyzn',
     'Male_15': 'Oczekiwana długość życia mężczyzn w wieku 15 lat',
     'Male_30': 'Oczekiwana długość życia mężczyzn w wieku 30 lat',
     'Male_45': 'Oczekiwana długość życia mężczyzn w wieku 45 lat',
     'Male_60': 'Oczekiwana długość życia mężczyzn w wieku 60 lat',
-    'Female_0': 'Oczekiwana długość życia kobiet w wieku 0 lat',
+    'Female_0': 'Oczekiwana długość życia kobiet',
     'Female_15': 'Oczekiwana długość życia kobiet w wieku 15 lat',
     'Female_30': 'Oczekiwana długość życia kobiet w wieku 30 lat',
     'Female_45': 'Oczekiwana długość życia kobiet w wieku 45 lat',
@@ -170,4 +173,4 @@ for age_group, label in age_group_labels.items():
     plt.savefig(f"{output_dir}/{label}.png")
     plt.close(fig)
 
-    print(f"Mapy heksagonalne zostały zapisane w katalogu: {output_dir}")
+    print(f"Mapa została zapisana w katalogu: {output_dir}")
