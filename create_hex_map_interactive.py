@@ -10,50 +10,58 @@ import plotly.graph_objects as go
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 
-# Wczytanie danych demograficznych
-parser = argparse.ArgumentParser()
-parser.add_argument('--file_path', type=str, help='Path to the Excel file')
+# Utwórz parser argumentów
+parser = argparse.ArgumentParser(description='Create hex maps.')
+
+# Dodaj argumenty
+parser.add_argument('--shapefile_path', type=str, help='Path to the shapefile')
+parser.add_argument('--output_dir', type=str, help='Output directory for hex maps')
+parser.add_argument('--file_path', type=str, help='Path to the data file')
+
+# Analizuj argumenty
 args = parser.parse_args()
 
-# Wczytanie danych demograficznych
+# Użyj argumentów
+shapefile_path = args.shapefile_path
+output_dir = args.output_dir
 df = pd.read_excel(args.file_path)
 
-# Usuwamy pierwszą kolumnę
+# Remove the first column
 df = df.iloc[:, 1:]
 
-# Wybieramy tylko wiersze od 0 do 21 (22 wiersze łącznie)
+# Select only rows from 0 to 21 (22 rows in total)
 df_total = df.iloc[5:22, :]
 
-# Zakładamy, że kolumny 3, 4, 5, 6 zawierają dane o mężczyznach
+# Columns 3, 4, 5, 6 contain data about men
 df_men = df_total.iloc[:, [0, 1, 2, 3, 4, 5]]
-# Zmieniamy nazwy kolumn dla mężczyzn
+# Rename columns for men
 df_men.columns = ['Voivodship', 'Male_0', 'Male_15', 'Male_30', 'Male_45', 'Male_60']
 
-# Zakładamy, że kolumny 6, 7, 8, 9, 10 zawierają dane o kobietach
+# Columns 6, 7, 8, 9, 10 contain data about women
 df_women = df_total.iloc[:, [0, 6, 7, 8, 9, 10]]
-# Zmieniamy nazwy kolumn dla kobiet
+# Rename columns for women
 df_women.columns = ['Voivodship', 'Female_0', 'Female_15', 'Female_30', 'Female_45', 'Female_60']
 
-# Łączymy dane dla mężczyzn i kobiet
+# Combine data for men and women
 df_combined = pd.merge(df_men, df_women, on='Voivodship')
 
-# Wyświetlenie unikalnych wartości w kolumnie 'Voivodship' w danych demograficznych
+# Display unique values in the 'Voivodship' column in demographic data
 print("Voivodship values in demographic data:")
 print(df_combined['Voivodship'].unique())
 
-# Wczytanie pliku shapefile z granicami administracyjnymi Polski
+# Load shapefile with administrative boundaries of Poland
 shapefile_path = 'C:/Projekty/Life Expect/Shape Files/A01_Granice_wojewodztw.shp'
 gdf = gpd.read_file(shapefile_path)
 
-# Wyświetlenie dostępnych kolumn w pliku shapefile
+# Display available columns in the shapefile
 print("Columns in shapefile data:")
 print(gdf.columns)
 
-# Wyświetlenie unikalnych wartości w kolumnie 'JPT_NAZWA_' w pliku shapefile
+# Display unique values in the 'JPT_NAZWA_' column in the shapefile
 print("Voivodship values in shapefile data:")
 print(gdf['JPT_NAZWA_'].unique())
 
-# Słownik mapujący niepoprawne nazwy na poprawne
+# Dictionary mapping incorrect names to correct ones
 voivodship_mapping = {
     'warmiÅ\x84sko-mazurskie': 'Warmińsko-Mazurskie',
     'opolskie': 'Opolskie',
@@ -73,26 +81,26 @@ voivodship_mapping = {
     'podkarpackie': 'Podkarpackie'
 }
 
-# Poprawienie nazw województw w pliku shapefile
+# Correct voivodship names in the shapefile
 gdf['JPT_NAZWA_'] = gdf['JPT_NAZWA_'].map(voivodship_mapping)
 
-# Sprawdzenie, czy nazwy zostały poprawnie zmapowane
+# Check if names were correctly mapped
 print("Corrected Voivodship values in shapefile data:")
 print(gdf['JPT_NAZWA_'].unique())
 
-# Zmieniamy nazwę kolumny na 'Voivodship'
+# Rename the column to 'Voivodship'
 gdf = gdf.rename(columns={'JPT_NAZWA_': 'Voivodship'})
 
-# Łączenie danych demograficznych z danymi geograficznymi
+# Merge demographic data with geographic data
 gdf = gdf.merge(df_combined, on='Voivodship')
 
-# Generowanie heksagonów dla całej Polski
-resolution = 5  # Ustawienie rozdzielczości heksagonów (zmniejszenie wartości zwiększa rozmiar heksagonów)
+# Generate hexagons for the entire Poland
+resolution = 5  # Set hexagon resolution (decreasing value increases hexagon size)
 
-# Tworzenie geometrii heksagonów
+# Create hexagon geometry
 poland_boundary = gdf.unary_union
-# Tworzenie geometrii heksagonów z buforem
-buffer_distance = -0.001  # Ustawienie odległości bufora od granic Polski (zmniejszenie wartości zwiększa odległość)
+# Create hexagon geometry with buffer
+buffer_distance = -0.001  # Set buffer distance from Poland's borders (decreasing value increases distance)
 hexagons = []
 hex_indices = h3.polyfill(poland_boundary.__geo_interface__, resolution, geo_json_conformant=True)
 for h in hex_indices:
@@ -104,47 +112,44 @@ for h in hex_indices:
     })
 hex_gdf = gpd.GeoDataFrame(hexagons, crs="EPSG:4326")
 
-# Przypisanie wartości do heksagonów
+# Assign values to hexagons
 hex_gdf = gpd.sjoin(hex_gdf, gdf, how='left', op='intersects')
 hex_gdf = hex_gdf.dropna(subset=['Voivodship'])
 
-# Tworzenie katalogu na pliki graficzne
-output_dir = 'C:/Projekty/Life Expect/hex_maps_interactive'
-os.makedirs(output_dir, exist_ok=True)
 
-# Mapowanie nazw kolumn na bardziej czytelne nazwy
+# Map column names to more readable names
 age_group_labels = {
-    'Male_0': 'Oczekiwana długość życia mężczyzn',
-    'Male_15': 'Oczekiwana długość życia mężczyzn w wieku 15 lat',
-    'Male_30': 'Oczekiwana długość życia mężczyzn w wieku 30 lat',
-    'Male_45': 'Oczekiwana długość życia mężczyzn w wieku 45 lat',
-    'Male_60': 'Oczekiwana długość życia mężczyzn w wieku 60 lat',
-    'Female_0': 'Oczekiwana długość życia kobiet',
-    'Female_15': 'Oczekiwana długość życia kobiet w wieku 15 lat',
-    'Female_30': 'Oczekiwana długość życia kobiet w wieku 30 lat',
-    'Female_45': 'Oczekiwana długość życia kobiet w wieku 45 lat',
-    'Female_60': 'Oczekiwana długość życia kobiet w wieku 60 lat'
+    'Male_0': 'Life expectancy of men',
+    'Male_15': 'Life expectancy of men at age 15',
+    'Male_30': 'Life expectancy of men at age 30',
+    'Male_45': 'Life expectancy of men at age 45',
+    'Male_60': 'Life expectancy of men at age 60',
+    'Female_0': 'Life expectancy of women',
+    'Female_15': 'Life expectancy of women at age 15',
+    'Female_30': 'Life expectancy of women at age 30',
+    'Female_45': 'Life expectancy of women at age 45',
+    'Female_60': 'Life expectancy of women at age 60'
 }
 
 colorscale = [[0, "#dad66f"], [1, "darkgreen"]]
 
-# Generowanie interaktywnych map heksagonalnych z tooltipami
+# Generate interactive hexagonal maps with tooltips
 for age_group, label in age_group_labels.items():
     hex_gdf[age_group] = hex_gdf[age_group].astype(float)
 
-    # Utworzenie interaktywnej mapy heksagonalnej
+    # Create interactive hexagonal map
     fig = px.choropleth_mapbox(
         hex_gdf, geojson=hex_gdf.geometry, 
         locations=hex_gdf.index, color=age_group,
         hover_name="Voivodship", 
         mapbox_style="white-bg", 
-        zoom=5, center = {"lat": 52.069167, "lon": 19.480556},
+        zoom=5, center={"lat": 52.069167, "lon": 19.480556},
         opacity=0.9, 
         labels={age_group: label},
         hover_data={'Voivodship': True, 'h3_index': False},
         color_continuous_scale=colorscale  
     )
-    fig.update_traces(marker_line=dict(width=3, color='white'))  # Dodanie białych linii między heksagonami
+    fig.update_traces(marker_line=dict(width=3, color='white'))  # Add white lines between hexagons
     fig.update_layout(coloraxis_showscale=False)
     fig.update_layout(
         xaxis=dict(
@@ -165,23 +170,23 @@ for age_group, label in age_group_labels.items():
             )
         )
     )
-    cmap = mcolors.LinearSegmentedColormap.from_list("mycmap", colorscale)  # Utworzenie mapy kolorów
+    cmap = mcolors.LinearSegmentedColormap.from_list("mycmap", colorscale)  # Create color map
 
 
-    # Dodanie legendy z kropkami kolorów
+    # Add legend with color dots
     min_val = hex_gdf[age_group].min()
     max_val = hex_gdf[age_group].max()
     for i in np.linspace(min_val, max_val, 5):
-        normalized_i = (i - min_val) / (max_val - min_val)  # Normalizacja do zakresu 0-1
-        color = cmap(normalized_i)  # Interpolacja koloru
+        normalized_i = (i - min_val) / (max_val - min_val)  # Normalize to 0-1 range
+        color = cmap(normalized_i)  # Interpolate color
         fig.add_trace(go.Scatter(
             x=[None], y=[None],
             mode='markers',
-            marker=dict(size=400, color='rgba'+str(color)),  # wielkość kropki i kolor
+            marker=dict(size=400, color='rgba'+str(color)),  # dot size and color
             legendgroup="Life Expectancy", name=f"{round(i, 2)}",  # Round to 2 decimal places
             showlegend=True
         ))
-    # Zapisanie do pliku HTML
+    # Save to HTML file
     fig.write_html(f"{output_dir}/{label}.html")
 
-print("Interaktywne mapy heksagonalne zostały zapisane w katalogu: hex_maps_interactive")
+    print(f"Interactive map has been saved in the directory: {output_dir}/{label}.html")
