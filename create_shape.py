@@ -1,7 +1,12 @@
 import pandas as pd
 import geopandas as gpd
-import folium
-from folium.features import DivIcon
+import matplotlib.pyplot as plt
+import h3
+from shapely.geometry import Polygon
+import os
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+import numpy as np
+from matplotlib.colors import LinearSegmentedColormap
 
 # Wczytanie danych demograficznych
 file_path = 'C:/Projekty/Life Expect/table_b_life_expectancy_in_poland_by_voivodships_in_2022.xlsx'
@@ -25,6 +30,11 @@ df_women.columns = ['Voivodship', 'Female_0', 'Female_15', 'Female_30', 'Female_
 
 # Łączymy dane dla mężczyzn i kobiet
 df_combined = pd.merge(df_men, df_women, on='Voivodship')
+
+# Zmieniamy nazwy kolumn na bardziej czytelne
+colors = ["#dad66f", "darkgreen"]
+# Tworzenie niestandardowej mapy kolorów
+cmap = LinearSegmentedColormap.from_list("mycmap", colors)
 
 # Wyświetlenie unikalnych wartości w kolumnie 'Voivodship' w danych demograficznych
 print("Voivodship values in demographic data:")
@@ -75,47 +85,90 @@ gdf = gdf.rename(columns={'JPT_NAZWA_': 'Voivodship'})
 # Łączenie danych demograficznych z danymi geograficznymi
 gdf = gdf.merge(df_combined, on='Voivodship')
 
-# Wyświetlenie pierwszych kilku rekordów po połączeniu danych
-print(gdf.head())
+# Generowanie heksagonów dla całej Polski
+resolution = 5  # Ustawienie rozdzielczości heksagonów (zmniejszenie wartości zwiększa rozmiar heksagonów)
 
-# Tworzenie mapy
-m = folium.Map(location=[52.237049, 21.017532], zoom_start=6)
+# Tworzenie geometrii heksagonów
+poland_boundary = gdf.unary_union
+# Tworzenie geometrii heksagonów z buforem
+buffer_distance = -0.001  # Ustawienie odległości bufora od granic Polski (zmniejszenie wartości zwiększa odległość) 
+hexagons = []
+hex_indices = h3.polyfill(poland_boundary.__geo_interface__, resolution, geo_json_conformant=True)
+for h in hex_indices:
+    hex_boundary = h3.h3_to_geo_boundary(h, geo_json=True)
+    hex_polygon = Polygon(hex_boundary).buffer(buffer_distance)
+    hexagons.append({
+        'geometry': hex_polygon,
+        'h3_index': h
+    })
+hex_gdf = gpd.GeoDataFrame(hexagons, crs="EPSG:4326")
 
-# Dodanie warstw do mapy
-age_groups = ['Male_0', 'Female_0']
+# Przypisanie wartości do heksagonów
+hex_gdf = gpd.sjoin(hex_gdf, gdf, how='left', op='intersects')
+hex_gdf = hex_gdf.dropna(subset=['Voivodship'])
 
-for age_group in age_groups:
-    choropleth = folium.Choropleth(
-        geo_data=gdf,
-        name=age_group,
-        data=gdf,
-        columns=['Voivodship', age_group],
-        key_on='feature.properties.Voivodship',
-        fill_color='YlGn',
-        fill_opacity=0.7,
-        line_opacity=0.2,
-        legend_name=f'Population of {age_group.replace("_", " ")}'
-    )
-    choropleth.add_to(m)
+# Tworzenie katalogu na pliki graficzne
+output_dir = 'C:/Projekty/Life Expect/hex_maps'
+os.makedirs(output_dir, exist_ok=True)
+
+# Mapowanie nazw kolumn na bardziej czytelne nazwy
+age_group_labels = {
+    'Male_0': 'Oczekiwana długość życia mężczyzn w wieku 0 lat',
+    'Male_15': 'Oczekiwana długość życia mężczyzn w wieku 15 lat',
+    'Male_30': 'Oczekiwana długość życia mężczyzn w wieku 30 lat',
+    'Male_45': 'Oczekiwana długość życia mężczyzn w wieku 45 lat',
+    'Male_60': 'Oczekiwana długość życia mężczyzn w wieku 60 lat',
+    'Female_0': 'Oczekiwana długość życia kobiet w wieku 0 lat',
+    'Female_15': 'Oczekiwana długość życia kobiet w wieku 15 lat',
+    'Female_30': 'Oczekiwana długość życia kobiet w wieku 30 lat',
+    'Female_45': 'Oczekiwana długość życia kobiet w wieku 45 lat',
+    'Female_60': 'Oczekiwana długość życia kobiet w wieku 60 lat'
+}
+
+# Generowanie i zapisywanie plików graficznych
+
+for age_group, label in age_group_labels.items():
+    vmin = df_combined[age_group].min()
+    vmax = df_combined[age_group].max()
     
-    # Tworzenie grupy warstw dla etykiet
-    label_layer = folium.FeatureGroup(name=f'{age_group} Labels')
-    
-    # Dodanie etykiet do grupy warstw
-    for _, row in gdf.iterrows():
-        folium.map.Marker(
-            [row.geometry.centroid.y, row.geometry.centroid.x],
-            icon=DivIcon(
-                icon_size=(150,36),
-                icon_anchor=(0,0),
-                html=f'<div style="font-size: 10pt">{int(row[age_group])}</div>',
-            )
-        ).add_to(label_layer)
-    
-    label_layer.add_to(m)
+    fig, ax = plt.subplots(1, 1, figsize=(20, 20)) 
+    hex_gdf.boundary.plot(ax=ax, linewidth=2, color='white', alpha=0.0)
+    hex_gdf.plot(column=age_group, cmap=cmap, linewidth=2.0, ax=ax, edgecolor='#FFFFFF', legend=False)
 
-# Dodanie warstwy kontrolnej
-folium.LayerControl().add_to(m)
+    # Dostosowanie proporcji osi
+    ax.set_aspect('equal', 'box')
 
-# Zapisanie mapy do pliku HTML
-m.save('C:/Projekty/Life Expect/demographic_map.html')
+    # Ustawienie zakresu osi X i Y
+    ax.set_xlim([hex_gdf.bounds.minx.min(), hex_gdf.bounds.maxx.max()])
+    ax.set_ylim([hex_gdf.bounds.miny.min(), hex_gdf.bounds.maxy.max()])
+    # Ustawienie zakresu osi Y
+    y_min = hex_gdf.bounds.miny.min()
+    y_max = hex_gdf.bounds.maxy.max()
+    y_range = y_max - y_min
+    ax.set_ylim([y_min - 0.1 * y_range, y_max + 0.01 * y_range])
+    # Dodanie legendy z kropkami
+    norm = plt.Normalize(vmin=vmin, vmax=vmax)
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+    sm._A = []
+
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="5%", pad=0.5)
+
+    legend_labels = np.linspace(vmin, vmax, num=10)
+    for value in legend_labels:
+        cax.scatter([], [], color=sm.to_rgba(value), label=f"{value:.2f}", s=2400)  # Zwiększenie wielkości kropek
+
+    # Położenie legendy tak aby kropki nie wchodziły na siebie, tytuł nie wchodził na legendę
+    cax.legend(frameon=False, loc='center left', fontsize='15', labelspacing=2, borderpad=2, handletextpad=2, borderaxespad=2, handlelength=0, bbox_to_anchor=(-1., 0.5))
+    cax.axis('off')
+    # Dodanie tytułu:
+    fig.suptitle(label, x=0.5, y=0.95, fontsize=20)
+
+    # Dostosowanie proporcji osi
+    ax.set_aspect('auto')
+
+    ax.axis('off')
+    plt.savefig(f"{output_dir}/{label}.png")
+    plt.close(fig)
+
+    print(f"Mapy heksagonalne zostały zapisane w katalogu: {output_dir}")
