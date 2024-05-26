@@ -143,15 +143,15 @@ for age_group, label in age_group_labels.items():
         locations=hex_gdf.index, color=age_group,
         hover_name="Voivodship", 
         mapbox_style="white-bg", 
-        zoom=5, center={"lat": 52.069167, "lon": 19.480556},
+        zoom=5.6, center={"lat": 52.069167, "lon": 19.480556},
         opacity=0.9, 
         labels={age_group: label},
         hover_data={'Voivodship': True, 'h3_index': False},
         color_continuous_scale=colorscale  
     )
     fig.update_traces(marker_line=dict(width=3, color='white'))  # Add white lines between hexagons
-    fig.update_layout(coloraxis_showscale=False)
     fig.update_layout(
+        coloraxis_showscale=False,
         xaxis=dict(
             showgrid=False,
             zeroline=False,
@@ -161,14 +161,27 @@ for age_group, label in age_group_labels.items():
             showgrid=False,
             zeroline=False,
             showticklabels=False
-        )
-    )
-    fig.update_layout(
+        ),
         legend=dict(
             font=dict(
                 size=20  # Increase this value to increase the size of the text in the legend
             )
-        )
+        ),
+        annotations=[
+            dict(
+                x=0.95,
+                y=1.03,
+                align="right",
+                valign="top",
+                text=label,  # Use the label variable as the text
+                showarrow=False,
+                xref="paper",
+                yref="paper",
+                xanchor="left",
+                yanchor="top",
+                font=dict(size=12)
+            )
+        ]
     )
     cmap = mcolors.LinearSegmentedColormap.from_list("mycmap", colorscale)  # Create color map
 
